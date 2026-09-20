@@ -1,0 +1,39 @@
+{
+  "name": "greenhouse-backend",
+  "version": "1.0.0",
+  "description": "Production-minded Smart Greenhouse REST API with PostgreSQL and MQTT",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/src/server.js",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/swagger": "^9.8.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@sinclair/typebox": "^0.34.52",
+    "dotenv": "^18.0.1",
+    "fastify": "^5.12.5",
+    "mqtt": "^5.16.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
+    "eslint": "^10.11.0",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
+  }
+}
