@@ -48,5 +48,5 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"]
 }

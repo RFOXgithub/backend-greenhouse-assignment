@@ -57,6 +57,19 @@ async function closeMqtt(client: MqttClient): Promise<void> {
   );
 }
 
+async function waitForDatabaseValue(
+  sql: string,
+  expected: string,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if ((await queryDatabase(sql)) === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for database value: ${expected}`);
+}
+
 describe("Smart Greenhouse API integration", () => {
   it("reports backend, PostgreSQL, and MQTT as healthy", async () => {
     const response = await fetch(`${apiBaseUrl}/status`);
@@ -150,7 +163,7 @@ describe("Smart Greenhouse API integration", () => {
     });
   });
 
-  it("publishes a valid device command to the exact MQTT topic", async () => {
+  it("publishes a command and records the device acknowledgement", async () => {
     const deviceId = `fan-test-${randomUUID()}`;
     const topic = `greenhouse/control/${deviceId}`;
     const client = await connectMqtt();
@@ -193,6 +206,25 @@ describe("Smart Greenhouse API integration", () => {
         `SELECT status || ',' || mqtt_topic FROM device_commands WHERE id = '${body.data.id}'`,
       );
       expect(stored).toBe(`PUBLISHED,${topic}`);
+
+      await new Promise<void>((resolve, reject) => {
+        client.publish(
+          `greenhouse/status/${deviceId}`,
+          JSON.stringify({
+            command_id: body.data.id,
+            device_id: deviceId,
+            status: "EXECUTED",
+            executed_at: new Date().toISOString(),
+          }),
+          { qos: 1, retain: false },
+          (error) => (error ? reject(error) : resolve()),
+        );
+      });
+
+      await waitForDatabaseValue(
+        `SELECT status FROM device_commands WHERE id = '${body.data.id}' AND executed_at IS NOT NULL`,
+        "EXECUTED",
+      );
     } finally {
       await closeMqtt(client);
     }

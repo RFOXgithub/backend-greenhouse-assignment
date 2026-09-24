@@ -35,9 +35,30 @@ export async function markDeviceCommandPublished(id: string, publishedAt: Date) 
     await pool.query(
       `UPDATE device_commands
        SET status = 'PUBLISHED', published_at = $2
-       WHERE id = $1`,
+       WHERE id = $1 AND status = 'PENDING'`,
       [id, publishedAt],
     );
+  } catch (error) {
+    throw new DatabaseOperationError(error);
+  }
+}
+
+export async function markDeviceCommandExecuted(
+  id: string,
+  deviceId: string,
+  executedAt: Date,
+): Promise<boolean> {
+  try {
+    const result = await pool.query(
+      `UPDATE device_commands
+       SET status = 'EXECUTED', executed_at = COALESCE(executed_at, $3)
+       WHERE id = $1
+         AND device_id = $2
+         AND status IN ('PENDING', 'PUBLISHED', 'EXECUTED')
+       RETURNING id`,
+      [id, deviceId, executedAt],
+    );
+    return result.rowCount === 1;
   } catch (error) {
     throw new DatabaseOperationError(error);
   }

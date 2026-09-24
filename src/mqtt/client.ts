@@ -1,5 +1,8 @@
 import mqtt, { type MqttClient } from "mqtt";
 import { env } from "../config/env.js";
+import { handleDeviceAcknowledgement } from "../modules/device/device-acknowledgement.service.js";
+
+const deviceStatusTopic = "greenhouse/status/+";
 
 let client: MqttClient | null = null;
 
@@ -22,6 +25,21 @@ export function startMqtt(): MqttClient {
 
   client.on("connect", () => {
     console.info("MQTT connected");
+    client?.subscribe(deviceStatusTopic, { qos: 1 }, (error) => {
+      if (error) console.error("MQTT status subscription failed", error.message);
+      else console.info(`MQTT subscribed to ${deviceStatusTopic}`);
+    });
+  });
+
+  client.on("message", (topic, payload) => {
+    if (!topic.startsWith("greenhouse/status/")) return;
+
+    void handleDeviceAcknowledgement(topic, payload).catch((error: unknown) => {
+      console.warn(
+        "MQTT device acknowledgement rejected",
+        error instanceof Error ? error.message : error,
+      );
+    });
   });
 
   client.on("reconnect", () => {

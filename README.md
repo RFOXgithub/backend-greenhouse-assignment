@@ -6,7 +6,7 @@ Backend REST API untuk menyimpan data sensor greenhouse dan mengirim perintah pe
 
 - Menyimpan data suhu dan kelembapan ke PostgreSQL.
 - Mengirim perintah `ON` atau `OFF` ke topik MQTT perangkat.
-- Menyimpan riwayat dan status pengiriman perintah.
+- Menyimpan riwayat pengiriman dan acknowledgement eksekusi perangkat.
 - Memeriksa koneksi API, PostgreSQL, dan MQTT.
 - Dokumentasi API melalui Swagger UI.
 - Validasi request, rate limit 100 request/menit/IP, dan batas body 1 MiB.
@@ -54,6 +54,7 @@ Endpoint `POST /device-control` menerima `device_id` dan perintah `ON` atau `OFF
 3. Service membentuk topic terstruktur `greenhouse/control/{device_id}`.
 4. Payload JSON diterbitkan ke Mosquitto dengan **QoS 1** dan `retain: false`.
 5. Jika publish berhasil, status database diubah menjadi `PUBLISHED`. Jika gagal, status diubah menjadi `FAILED` beserta pesan error.
+6. Backend subscribe ke `greenhouse/status/+`. Setelah perangkat menjalankan perintah, perangkat mengirim acknowledgement dan status database berubah menjadi `EXECUTED`.
 
 Contoh untuk perangkat `fan-zone-1`:
 
@@ -70,6 +71,26 @@ Topic: greenhouse/control/fan-zone-1
   "issued_at": "2026-09-20T10:00:00.000Z"
 }
 ```
+
+Setelah berhasil menjalankan perintah, perangkat menerbitkan acknowledgement
+dengan QoS 1 dan `retain: false`:
+
+```text
+Topic: greenhouse/status/fan-zone-1
+```
+
+```json
+{
+  "command_id": "UUID dari command yang diterima",
+  "device_id": "fan-zone-1",
+  "status": "EXECUTED",
+  "executed_at": "2026-09-20T10:00:01.000Z"
+}
+```
+
+Backend hanya menerima status `EXECUTED`, memastikan `device_id` sama dengan
+suffix topic, dan mencocokkan command dengan record database. Acknowledgement
+duplikat diproses secara idempotent dan tidak mengubah waktu eksekusi pertama.
 
 Koneksi broker diatur melalui `MQTT_URL`. Saat seluruh aplikasi berjalan di Docker, API menggunakan `mqtt://mosquitto:1883`. Saat API dijalankan langsung dari komputer, gunakan `mqtt://127.0.0.1:1883`. MQTT client mencoba menyambung kembali setiap 2 detik jika koneksi terputus dan menggunakan batas waktu koneksi 5 detik.
 
@@ -205,7 +226,8 @@ API lokal tetap membutuhkan PostgreSQL dan MQTT broker. Langkah berikut mengguna
    npm run dev
    ```
 
-Migrasi `migrations/001_init.sql` dijalankan otomatis ketika API dimulai. Tidak ada perintah migrasi manual.
+Semua file SQL di folder `migrations/` dijalankan berurutan secara otomatis
+ketika API dimulai. Tidak ada perintah migrasi manual.
 
 Untuk menjalankan hasil build:
 
@@ -269,6 +291,24 @@ Untuk melihat pesan MQTT ketika menggunakan Docker:
 ```bash
 docker compose exec mosquitto mosquitto_sub -h localhost -t "greenhouse/control/#" -v
 ```
+
+Atau jalankan pengujian otomatis tanpa aplikasi MQTT tambahan. Script ini membuat
+subscriber, mengirim request ke API, lalu memeriksa topic dan payload yang diterima:
+
+```bash
+npm run test:mqtt
+```
+
+`device_id` dan command dapat diberikan secara opsional:
+
+```bash
+npm run test:mqtt -- fan-zone-1 OFF
+```
+
+Pastikan stack sudah aktif dengan `docker compose up -d --build`. Secara default
+script menggunakan API `http://127.0.0.1:8080` dan broker
+`mqtt://127.0.0.1:1883`. Keduanya dapat diubah melalui `TEST_API_URL` dan
+`TEST_MQTT_URL`.
 
 ## Pemeriksaan dan test
 
